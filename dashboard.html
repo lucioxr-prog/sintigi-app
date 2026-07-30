@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — UI/UX Pro Max</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="header">
+  <h1>UI/UX Pro Max</h1>
+  <button class="sec" id="btn-logout" style="width:auto">Esci</button>
+</div>
+<div id="banner-scadenza"></div>
+
+<div class="main top-aligned">
+  <div class="card wide">
+    <h2>Cerca</h2>
+    <div class="sub">Il motore di ricerca gira su un server separato: la tua query non passa mai da qui in chiaro nel senso di essere salvata da noi — lo storico resta solo su questo browser.</div>
+
+    <form id="form-ricerca">
+      <label for="query">Query</label>
+      <input type="text" id="query" placeholder="es. dashboard analytics fintech" required>
+      <button type="submit" id="btn-cerca">Cerca</button>
+    </form>
+
+    <div class="msg-errore" id="msg-errore"></div>
+    <div class="risultato" id="risultato" style="display:none"></div>
+
+    <h2 style="margin-top:32px">Storico locale (solo su questo browser)</h2>
+    <div class="sub">Non è mai stato inviato a nessun server: se cambi browser o dispositivo non lo ritrovi qui.</div>
+    <div class="riga-azioni">
+      <button class="sec" id="btn-esporta">Esporta JSON</button>
+      <button class="sec" id="btn-cancella">Cancella storico locale</button>
+    </div>
+    <div id="lista-storico"></div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/dashboard.js"></script>
+<script>
+  richiediSessione();
+  aggiornaBannerScadenza();
+  ricontrollaLicenza();
+  avviaRicontrolloPeriodico();
+
+  document.getElementById("btn-logout").addEventListener("click", logout);
+
+  const form = document.getElementById("form-ricerca");
+  const msgErrore = document.getElementById("msg-errore");
+  const risultatoDiv = document.getElementById("risultato");
+  const btn = document.getElementById("btn-cerca");
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    msgErrore.style.display = "none";
+    risultatoDiv.style.display = "none";
+    btn.disabled = true;
+    btn.textContent = "Ricerca in corso...";
+
+    const query = document.getElementById("query").value.trim();
+    try {
+      const risultato = await eseguiRicerca(query, {});
+      risultatoDiv.textContent = JSON.stringify(risultato, null, 2);
+      risultatoDiv.style.display = "block";
+      await ricaricaStorico();
+    } catch (err) {
+      if (err.message === "SESSIONE_SCADUTA") {
+        logout();
+        return;
+      }
+      msgErrore.textContent = err.message || "Errore imprevisto.";
+      msgErrore.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Cerca";
+    }
+  });
+
+  document.getElementById("btn-esporta").addEventListener("click", async () => {
+    const voci = await leggiStorico();
+    esportaStoricoJson(voci);
+  });
+
+  document.getElementById("btn-cancella").addEventListener("click", async () => {
+    if (!confirm("Cancellare tutto lo storico locale? Non è recuperabile.")) return;
+    await cancellaStorico();
+    await ricaricaStorico();
+  });
+
+  async function ricaricaStorico() {
+    const voci = await leggiStorico();
+    const lista = document.getElementById("lista-storico");
+    if (!voci.length) {
+      lista.innerHTML = '<div class="sub" style="margin-top:12px">Nessuna ricerca ancora.</div>';
+      return;
+    }
+    lista.innerHTML = voci
+      .map((v) => {
+        const data = new Date(v.timestamp).toLocaleString("it-IT");
+        return `<div class="storico-voce"><div class="q">${escapeHtml(v.query)}</div><div class="t">${data}</div></div>`;
+      })
+      .join("");
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  ricaricaStorico();
+</script>
+</body>
+</html>

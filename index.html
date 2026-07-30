@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Accedi — UI/UX Pro Max</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="header"><h1>UI/UX Pro Max</h1></div>
+<div class="main">
+  <div class="card">
+    <h2>Accedi</h2>
+    <div class="sub">Inserisci le credenziali del tuo account.</div>
+
+    <form id="form-login">
+      <label for="email">Email</label>
+      <input type="email" id="email" required autocomplete="username">
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required autocomplete="current-password">
+
+      <button type="submit" id="btn-login">Accedi</button>
+    </form>
+
+    <div class="msg-errore" id="msg-errore"></div>
+
+    <div class="link-riga">
+      Primo accesso? <a href="register.html">Crea la tua password</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  if (sessioneAttiva()) {
+    window.location.href = "dashboard.html";
+  }
+
+  const form = document.getElementById("form-login");
+  const msgErrore = document.getElementById("msg-errore");
+  const btn = document.getElementById("btn-login");
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    msgErrore.style.display = "none";
+    btn.disabled = true;
+    btn.textContent = "Accesso in corso...";
+
+    try {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const risposta = await chiamaAppsScript("login", { email, password });
+
+      if (!risposta.ok) {
+        msgErrore.textContent = risposta.errore || "Accesso non riuscito.";
+        msgErrore.style.display = "block";
+        return;
+      }
+
+      salvaSessione({
+        token: risposta.token,
+        email,
+        prodotto: risposta.prodotto,
+        data_scadenza: risposta.data_scadenza,
+        giorni_rimanenti: risposta.giorni_rimanenti,
+      });
+      window.location.href = "dashboard.html";
+    } catch (err) {
+      msgErrore.textContent = err.message || "Errore imprevisto.";
+      msgErrore.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Accedi";
+    }
+  });
+</script>
+</body>
+</html>
