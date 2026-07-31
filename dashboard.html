@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sintigi — Dashboard</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/cerca.css">
 </head>
 <body>
 <div class="header">
@@ -13,40 +14,45 @@
 </div>
 <div id="banner-scadenza"></div>
 
-<div class="main top-aligned">
-  <div class="card wide">
-    <h2>Cerca</h2>
-    <div class="sub">Il motore di ricerca gira su un server separato: la tua query non passa mai da qui in chiaro nel senso di essere salvata da noi — lo storico resta solo su questo browser.</div>
+<main class="cerca-main">
+  <div class="panel">
+    <div class="eyebrow">Cerca / motore privato</div>
+    <h1>Cerca</h1>
+    <p class="sub">Il motore di ricerca gira su un server separato: la tua query non passa mai da qui in chiaro nel senso di essere salvata da noi — lo storico resta solo su questo browser.</p>
 
     <form id="form-ricerca">
       <label for="query">Descrivi cosa vuoi creare o migliorare</label>
-      <div class="sub-campo">Es: landing page per un corso online rivolto a PMI</div>
+      <div class="hint">Es: landing page per un corso online rivolto a PMI</div>
       <input type="text" id="query" placeholder="es. dashboard analytics fintech" required>
-      <div class="chips-esempio" id="chips-esempio">
+      <div class="chips" id="chips-esempio">
         <button type="button" class="chip">Landing page per un corso online</button>
         <button type="button" class="chip">Palette colori per un e-commerce moda</button>
         <button type="button" class="chip">Dashboard analytics per una startup fintech</button>
         <button type="button" class="chip">Testi per una pagina di contatto professionale</button>
       </div>
-      <button type="submit" id="btn-cerca">Cerca</button>
+      <button type="submit" class="cta" id="btn-cerca">Cerca</button>
     </form>
 
     <div class="msg-errore" id="msg-errore"></div>
-    <div class="risultato" id="risultato" style="display:none"></div>
-    <div class="riga-azioni" id="azioni-risultato" style="display:none">
-      <button class="sec" id="btn-copia-ai">Copia per l'AI</button>
-      <button class="sec" id="btn-esporta-risultato">Esporta questo risultato</button>
+
+    <div id="blocco-risultati" style="display:none">
+      <div class="section-label" id="risultati-label">Risultati</div>
+      <div id="risultati-cards"></div>
+      <div class="actions">
+        <button id="btn-copia-ai">Copia per l'AI</button>
+        <button id="btn-esporta-risultato">Esporta questo risultato</button>
+      </div>
     </div>
 
-    <h2 style="margin-top:32px">Storico locale (solo su questo browser)</h2>
-    <div class="sub">Non è mai stato inviato a nessun server: se cambi browser o dispositivo non lo ritrovi qui.</div>
-    <div class="riga-azioni">
-      <button class="sec" id="btn-esporta">Esporta JSON</button>
-      <button class="sec" id="btn-cancella">Cancella storico locale</button>
+    <div class="section-label">Storico locale</div>
+    <p class="hint">Non è mai stato inviato a nessun server: se cambi browser o dispositivo non lo ritrovi qui.</p>
+    <div class="actions" style="margin-bottom:16px">
+      <button id="btn-esporta">Esporta JSON</button>
+      <button id="btn-cancella">Cancella storico locale</button>
     </div>
     <div id="lista-storico"></div>
   </div>
-</div>
+</main>
 
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
@@ -61,38 +67,148 @@
 
   const form = document.getElementById("form-ricerca");
   const msgErrore = document.getElementById("msg-errore");
-  const risultatoDiv = document.getElementById("risultato");
+  const queryInput = document.getElementById("query");
+  const bloccoRisultati = document.getElementById("blocco-risultati");
+  const risultatiLabel = document.getElementById("risultati-label");
+  const risultatiCards = document.getElementById("risultati-cards");
   const btn = document.getElementById("btn-cerca");
-  const azioniRisultato = document.getElementById("azioni-risultato");
   const btnCopiaAi = document.getElementById("btn-copia-ai");
   const btnEsportaRisultato = document.getElementById("btn-esporta-risultato");
   let ultimaVoce = null;
 
+  function sincronizzaChipAttivo() {
+    const valore = queryInput.value.trim();
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.textContent === valore);
+    });
+  }
+
   document.querySelectorAll(".chip").forEach((chip) => {
     chip.addEventListener("click", () => {
-      document.getElementById("query").value = chip.textContent;
-      document.getElementById("query").focus();
+      queryInput.value = chip.textContent;
+      queryInput.focus();
+      sincronizzaChipAttivo();
     });
   });
+  queryInput.addEventListener("input", sincronizzaChipAttivo);
+
+  // ============ Rendering risultati come card ============
+  // Il motore restituisce {domain, results: [...]}, ma le chiavi di ogni
+  // elemento di "results" cambiano nome a seconda del dominio (style/color/
+  // typography/...) -- non esiste un campo fisso "titolo"/"descrizione".
+  // Questa euristica prova i nomi di campo piu' comuni tra i domini noti e
+  // degrada in modo leggibile per quelli non mappati esplicitamente.
+
+  function estraiCampo(obj, candidati, esclusi) {
+    for (const c of candidati) {
+      if (esclusi && esclusi.has(c)) continue;
+      const v = obj[c];
+      if (v !== undefined && v !== null && String(v).trim()) {
+        return { chiave: c, valore: String(v).trim() };
+      }
+    }
+    return null;
+  }
+
+  function estraiTags(obj, esclusi) {
+    const candidati = ["Keywords", "Mood/Style Keywords", "CSS/Technical Keywords", "AI Prompt Keywords"];
+    for (const c of candidati) {
+      if (esclusi.has(c)) continue;
+      const v = obj[c];
+      if (v && String(v).includes(",")) {
+        return String(v).split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
+      }
+    }
+    return [];
+  }
+
+  function formattaRisultatoSingolo(obj) {
+    const usati = new Set();
+    const chiavi = Object.keys(obj);
+
+    const titoloTrovato = estraiCampo(
+      obj,
+      ["Style Category", "Font Pairing Name", "Product Type", "Category", "Guideline", "Name", "Title"]
+    );
+    const titolo = titoloTrovato ? titoloTrovato.valore : (chiavi[0] ? String(obj[chiavi[0]]).trim() : "Risultato");
+    if (titoloTrovato) usati.add(titoloTrovato.chiave); else if (chiavi[0]) usati.add(chiavi[0]);
+
+    const metaTrovato = estraiCampo(obj, ["Type", "Complexity", "Severity", "Category"], usati);
+    if (metaTrovato) usati.add(metaTrovato.chiave);
+
+    const corpoTrovato = estraiCampo(obj, ["Notes", "Description", "Best For"], usati);
+    if (corpoTrovato) usati.add(corpoTrovato.chiave);
+    let corpo = corpoTrovato ? corpoTrovato.valore : null;
+    if (corpo && corpo.length > 220) corpo = corpo.slice(0, 217) + "…";
+
+    const tags = estraiTags(obj, usati);
+
+    return { titolo, meta: metaTrovato ? metaTrovato.valore : null, corpo, tags };
+  }
+
+  function renderizzaCardRisultato(obj) {
+    const { titolo, meta, corpo, tags } = formattaRisultatoSingolo(obj);
+    const metaHtml = meta ? `<div class="result-meta">${escapeHtml(meta)}</div>` : "";
+    const corpoHtml = corpo ? `<div class="result-body">${escapeHtml(corpo)}</div>` : "";
+    const tagsHtml = tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("");
+    return `<div class="result-card">
+      <div class="result-title">${escapeHtml(titolo)}</div>
+      ${metaHtml}
+      ${corpoHtml}
+      ${tagsHtml}
+    </div>`;
+  }
+
+  function renderizzaRisultati(risultato) {
+    if (risultato && risultato.error) {
+      risultatiLabel.textContent = "Errore dal motore di ricerca";
+      risultatiCards.innerHTML = `<div class="result-card"><div class="result-body">${escapeHtml(String(risultato.error))}</div></div>`;
+      bloccoRisultati.style.display = "block";
+      return;
+    }
+
+    const elenco = Array.isArray(risultato && risultato.results) ? risultato.results : null;
+
+    if (!elenco) {
+      // Formato di risposta non mappato esplicitamente (es. design_system):
+      // fallback leggibile col JSON grezzo, invece di far sparire il dato.
+      risultatiLabel.textContent = "Risultato";
+      risultatiCards.innerHTML =
+        `<div class="result-card"><div class="result-body" style="white-space:pre-wrap; font-family:var(--mono)">${escapeHtml(JSON.stringify(risultato, null, 2))}</div></div>`;
+      bloccoRisultati.style.display = "block";
+      return;
+    }
+
+    if (!elenco.length) {
+      const suggerimenti = Array.isArray(risultato.suggestions) && risultato.suggestions.length
+        ? " Prova con: " + risultato.suggestions.join(", ")
+        : "";
+      risultatiLabel.textContent = "Nessun risultato trovato";
+      risultatiCards.innerHTML = `<div class="result-card"><div class="result-body">${escapeHtml("Nessun risultato per questa ricerca." + suggerimenti)}</div></div>`;
+      bloccoRisultati.style.display = "block";
+      return;
+    }
+
+    risultatiLabel.textContent = elenco.length === 1 ? "1 risultato trovato" : elenco.length + " risultati trovati";
+    risultatiCards.innerHTML = elenco.map(renderizzaCardRisultato).join("");
+    bloccoRisultati.style.display = "block";
+  }
 
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     msgErrore.style.display = "none";
-    risultatoDiv.style.display = "none";
-    azioniRisultato.style.display = "none";
+    bloccoRisultati.style.display = "none";
     ultimaVoce = null;
     btn.disabled = true;
     btn.textContent = "Ricerca in corso...";
 
-    const query = document.getElementById("query").value.trim();
+    const query = queryInput.value.trim();
     try {
       const risultato = await eseguiRicerca(query, {});
-      risultatoDiv.textContent = JSON.stringify(risultato, null, 2);
-      risultatoDiv.style.display = "block";
+      renderizzaRisultati(risultato);
       await ricaricaStorico();
       const storicoAggiornato = await leggiStorico();
       ultimaVoce = storicoAggiornato[0] || null;
-      azioniRisultato.style.display = "flex";
     } catch (err) {
       if (err.message === "SESSIONE_SCADUTA") {
         logout();
@@ -144,13 +260,13 @@
     const voci = await leggiStorico();
     const lista = document.getElementById("lista-storico");
     if (!voci.length) {
-      lista.innerHTML = '<div class="sub" style="margin-top:12px">Nessuna ricerca ancora.</div>';
+      lista.innerHTML = '<div class="hint">Nessuna ricerca ancora.</div>';
       return;
     }
     lista.innerHTML = voci
       .map((v) => {
         const data = new Date(v.timestamp).toLocaleString("it-IT");
-        return `<div class="storico-voce"><div class="q">${escapeHtml(v.query)}</div><div class="t">${data}</div></div>`;
+        return `<div class="history-item"><div class="history-title">${escapeHtml(v.query)}</div><div class="history-date">${data}</div></div>`;
       })
       .join("");
   }
