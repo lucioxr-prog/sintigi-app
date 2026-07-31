@@ -144,3 +144,20 @@ button.sec { background: transparent; color: var(--tx); border: 1px solid var(--
 
 .riga-azioni { display: flex; gap: 8px; margin-top: 10px; }
 .riga-azioni button { margin-top: 0; }
+
+.sub-campo { color: var(--mut); font-size: 12px; margin-top: 4px; margin-bottom: 6px; }
+
+.chips-esempio { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip {
+  background: var(--bg);
+  color: var(--tx);
+  border: 1px solid var(--bd);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  width: auto;
+  margin-top: 0;
+  cursor: pointer;
+}
+.chip:hover { background: var(--bd); }

@@ -10,23 +10,59 @@
 <div class="header"><h1>Sintigi</h1></div>
 <div class="main">
   <div class="card">
-    <h2>Accedi</h2>
-    <div class="sub">Inserisci le credenziali del tuo account.</div>
+    <div id="vista-login">
+      <h2>Accedi</h2>
+      <div class="sub">Inserisci le credenziali del tuo account.</div>
 
-    <form id="form-login">
-      <label for="email">Email</label>
-      <input type="email" id="email" required autocomplete="username">
+      <form id="form-login">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="username">
 
-      <label for="password">Password</label>
-      <input type="password" id="password" required autocomplete="current-password">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password">
 
-      <button type="submit" id="btn-login">Accedi</button>
-    </form>
+        <button type="submit" id="btn-login">Accedi</button>
+      </form>
 
-    <div class="msg-errore" id="msg-errore"></div>
+      <div class="msg-errore" id="msg-errore"></div>
 
-    <div class="link-riga">
-      Primo accesso? <a href="register.html">Crea la tua password</a>
+      <div class="link-riga">
+        Primo accesso? <a href="register.html">Crea la tua password</a>
+      </div>
+      <div class="link-riga">
+        <a href="#" id="link-password-dimenticata">Password dimenticata?</a>
+      </div>
+    </div>
+
+    <div id="vista-reset" style="display:none">
+      <h2>Reimposta password</h2>
+      <div class="sub" id="reset-sub">Inserisci la tua email: se è registrata, riceverai un codice a 6 cifre via email.</div>
+
+      <form id="form-reset-step1">
+        <label for="reset-email">Email</label>
+        <input type="email" id="reset-email" required autocomplete="username">
+        <button type="submit" id="btn-reset-invia">Invia codice</button>
+      </form>
+
+      <form id="form-reset-step2" style="display:none">
+        <label for="reset-otp">Codice ricevuto via email</label>
+        <input type="text" id="reset-otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code">
+
+        <label for="reset-password">Nuova password</label>
+        <input type="password" id="reset-password" required minlength="8" autocomplete="new-password">
+
+        <label for="reset-password2">Conferma nuova password</label>
+        <input type="password" id="reset-password2" required minlength="8" autocomplete="new-password">
+
+        <button type="submit" id="btn-reset-conferma">Reimposta password</button>
+      </form>
+
+      <div class="msg-errore" id="reset-msg-errore"></div>
+      <div class="msg-ok" id="reset-msg-ok"></div>
+
+      <div class="link-riga">
+        <a href="#" id="link-torna-login">Torna al login</a>
+      </div>
     </div>
   </div>
 </div>
@@ -73,6 +109,117 @@
     } finally {
       btn.disabled = false;
       btn.textContent = "Accedi";
+    }
+  });
+
+  // ============ Reset password via OTP ============
+
+  const vistaLogin = document.getElementById("vista-login");
+  const vistaReset = document.getElementById("vista-reset");
+  const linkPasswordDimenticata = document.getElementById("link-password-dimenticata");
+  const linkTornaLogin = document.getElementById("link-torna-login");
+
+  const formResetStep1 = document.getElementById("form-reset-step1");
+  const formResetStep2 = document.getElementById("form-reset-step2");
+  const resetMsgErrore = document.getElementById("reset-msg-errore");
+  const resetMsgOk = document.getElementById("reset-msg-ok");
+  const resetSub = document.getElementById("reset-sub");
+  const btnResetInvia = document.getElementById("btn-reset-invia");
+  const btnResetConferma = document.getElementById("btn-reset-conferma");
+  const SUB_RESET_DEFAULT = resetSub.textContent;
+
+  let emailInResetCorso = "";
+
+  function mostraVistaReset() {
+    vistaLogin.style.display = "none";
+    vistaReset.style.display = "block";
+    resetMsgErrore.style.display = "none";
+    resetMsgOk.style.display = "none";
+    formResetStep1.style.display = "block";
+    formResetStep2.style.display = "none";
+    resetSub.textContent = SUB_RESET_DEFAULT;
+    document.getElementById("reset-email").value = document.getElementById("email").value.trim();
+  }
+
+  function mostraVistaLogin() {
+    vistaReset.style.display = "none";
+    vistaLogin.style.display = "block";
+    formResetStep1.reset();
+    formResetStep2.reset();
+  }
+
+  linkPasswordDimenticata.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    mostraVistaReset();
+  });
+
+  linkTornaLogin.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    mostraVistaLogin();
+  });
+
+  formResetStep1.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    resetMsgErrore.style.display = "none";
+    btnResetInvia.disabled = true;
+    btnResetInvia.textContent = "Invio in corso...";
+
+    const email = document.getElementById("reset-email").value.trim();
+    try {
+      const risposta = await chiamaAppsScript("request_reset", { email });
+      emailInResetCorso = email;
+      resetSub.textContent = risposta.messaggio || SUB_RESET_DEFAULT;
+      formResetStep1.style.display = "none";
+      formResetStep2.style.display = "block";
+    } catch (err) {
+      resetMsgErrore.textContent = err.message || "Errore imprevisto.";
+      resetMsgErrore.style.display = "block";
+    } finally {
+      btnResetInvia.disabled = false;
+      btnResetInvia.textContent = "Invia codice";
+    }
+  });
+
+  formResetStep2.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    resetMsgErrore.style.display = "none";
+    resetMsgOk.style.display = "none";
+
+    const otp = document.getElementById("reset-otp").value.trim();
+    const nuovaPassword = document.getElementById("reset-password").value;
+    const nuovaPassword2 = document.getElementById("reset-password2").value;
+
+    if (nuovaPassword !== nuovaPassword2) {
+      resetMsgErrore.textContent = "Le due password non coincidono.";
+      resetMsgErrore.style.display = "block";
+      return;
+    }
+
+    btnResetConferma.disabled = true;
+    btnResetConferma.textContent = "Verifica in corso...";
+
+    try {
+      const risposta = await chiamaAppsScript("confirm_reset", {
+        email: emailInResetCorso,
+        otp,
+        nuova_password: nuovaPassword,
+      });
+
+      if (!risposta.ok) {
+        resetMsgErrore.textContent = risposta.errore || "Reimpostazione non riuscita.";
+        resetMsgErrore.style.display = "block";
+        return;
+      }
+
+      resetMsgOk.textContent = risposta.messaggio || "Password aggiornata. Ora puoi accedere.";
+      resetMsgOk.style.display = "block";
+      setTimeout(mostraVistaLogin, 1500);
+    } catch (err) {
+      resetMsgErrore.textContent = err.message || "Errore imprevisto.";
+      resetMsgErrore.style.display = "block";
+    } finally {
+      btnResetConferma.disabled = false;
+      btnResetConferma.textContent = "Reimposta password";
     }
   });
 </script>

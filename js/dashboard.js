@@ -59,7 +59,17 @@ function esportaStoricoJson(voci) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "storico_ui-ux-pro-max_" + new Date().toISOString().slice(0, 10) + ".json";
+  a.download = "sintigi_storico_" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function esportaRisultatoJson(voce) {
+  const blob = new Blob([JSON.stringify(voce, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sintigi_risultato_" + new Date().toISOString().slice(0, 10) + ".json";
   a.click();
   URL.revokeObjectURL(url);
 }

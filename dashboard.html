@@ -19,13 +19,24 @@
     <div class="sub">Il motore di ricerca gira su un server separato: la tua query non passa mai da qui in chiaro nel senso di essere salvata da noi — lo storico resta solo su questo browser.</div>
 
     <form id="form-ricerca">
-      <label for="query">Query</label>
+      <label for="query">Descrivi cosa vuoi creare o migliorare</label>
+      <div class="sub-campo">Es: landing page per un corso online rivolto a PMI</div>
       <input type="text" id="query" placeholder="es. dashboard analytics fintech" required>
+      <div class="chips-esempio" id="chips-esempio">
+        <button type="button" class="chip">Landing page per un corso online</button>
+        <button type="button" class="chip">Palette colori per un e-commerce moda</button>
+        <button type="button" class="chip">Dashboard analytics per una startup fintech</button>
+        <button type="button" class="chip">Testi per una pagina di contatto professionale</button>
+      </div>
       <button type="submit" id="btn-cerca">Cerca</button>
     </form>
 
     <div class="msg-errore" id="msg-errore"></div>
     <div class="risultato" id="risultato" style="display:none"></div>
+    <div class="riga-azioni" id="azioni-risultato" style="display:none">
+      <button class="sec" id="btn-copia-ai">Copia per l'AI</button>
+      <button class="sec" id="btn-esporta-risultato">Esporta questo risultato</button>
+    </div>
 
     <h2 style="margin-top:32px">Storico locale (solo su questo browser)</h2>
     <div class="sub">Non è mai stato inviato a nessun server: se cambi browser o dispositivo non lo ritrovi qui.</div>
@@ -52,11 +63,24 @@
   const msgErrore = document.getElementById("msg-errore");
   const risultatoDiv = document.getElementById("risultato");
   const btn = document.getElementById("btn-cerca");
+  const azioniRisultato = document.getElementById("azioni-risultato");
+  const btnCopiaAi = document.getElementById("btn-copia-ai");
+  const btnEsportaRisultato = document.getElementById("btn-esporta-risultato");
+  let ultimaVoce = null;
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      document.getElementById("query").value = chip.textContent;
+      document.getElementById("query").focus();
+    });
+  });
 
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     msgErrore.style.display = "none";
     risultatoDiv.style.display = "none";
+    azioniRisultato.style.display = "none";
+    ultimaVoce = null;
     btn.disabled = true;
     btn.textContent = "Ricerca in corso...";
 
@@ -66,6 +90,9 @@
       risultatoDiv.textContent = JSON.stringify(risultato, null, 2);
       risultatoDiv.style.display = "block";
       await ricaricaStorico();
+      const storicoAggiornato = await leggiStorico();
+      ultimaVoce = storicoAggiornato[0] || null;
+      azioniRisultato.style.display = "flex";
     } catch (err) {
       if (err.message === "SESSIONE_SCADUTA") {
         logout();
@@ -77,6 +104,29 @@
       btn.disabled = false;
       btn.textContent = "Cerca";
     }
+  });
+
+  btnCopiaAi.addEventListener("click", async () => {
+    if (!ultimaVoce) return;
+    const contesto = ultimaVoce.query || "il contenuto richiesto";
+    const testo =
+      "Usa queste raccomandazioni di design system per generare " + contesto + ":\n\n" +
+      JSON.stringify(ultimaVoce.risultato, null, 2);
+    try {
+      await navigator.clipboard.writeText(testo);
+      const originale = btnCopiaAi.textContent;
+      btnCopiaAi.textContent = "Copiato!";
+      setTimeout(() => {
+        btnCopiaAi.textContent = originale;
+      }, 2000);
+    } catch (err) {
+      console.warn("Copia negli appunti fallita:", err);
+    }
+  });
+
+  btnEsportaRisultato.addEventListener("click", () => {
+    if (!ultimaVoce) return;
+    esportaRisultatoJson(ultimaVoce);
   });
 
   document.getElementById("btn-esporta").addEventListener("click", async () => {
